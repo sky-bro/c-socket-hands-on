@@ -52,9 +52,48 @@ int main(int argc, char const *argv[])
 		perror("accept");
 		exit(EXIT_FAILURE);
 	}
-	valread = read( new_socket , buffer, 1024);
-	printf("%s\n",buffer );
-	send(new_socket , hello , strlen(hello) , 0 );
-	printf("Hello message sent\n");
+// send hello string
+	// valread = read( new_socket , buffer, 1024);
+	// printf("%s\n",buffer );
+	// send(new_socket , hello , strlen(hello) , 0 );
+	// printf("Hello message sent\n");
+// handle upload file
+
+// filename
+	// char *filename = "0.txt";
+	// char *filename = "0.jpeg";
+	char *filename = "0.mp4";
+	// FILE *fp = fopen(filename, "w+");
+	//定义一个名叫fp文件指针
+	FILE *fp;
+	//判断按读方式打开一个名叫test的文件是否失败
+	if((fp=fopen(filename, "w+")) == NULL)//打开操作不成功
+	{
+	    printf("The file can not be opened.\n");
+	    exit(1);//结束程序的执行
+	}
+	printf("prepared file %s for upload\n", filename);
+// filesize
+	unsigned long long filesize = 0;
+	recv(new_socket, (char*)&filesize, sizeof(unsigned long long)+1, 0);
+	printf("Recving data of size %lld bytes from client\n", filesize);
+	unsigned long long bytesRecvd = 0;
+// file
+	do {
+			int singleRecvd = recv(new_socket, buffer, sizeof(buffer),0);
+			fwrite(buffer, singleRecvd, 1, fp);
+			bytesRecvd += singleRecvd;
+			printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
+			printf("%-4.2f%% data recv", bytesRecvd*100.0/filesize);
+			fflush(stdout);
+	} while (filesize - bytesRecvd > 0);
+// handle download file
+// filename
+// filesize
+// file
+	printf("\n");
+	fclose(fp);
+	close(new_socket);
+	close(server_fd);
 	return 0;
 }
