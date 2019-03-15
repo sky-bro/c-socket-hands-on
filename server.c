@@ -17,9 +17,9 @@ void handleUpload(void* p_new_socket){
 	long new_socket = (long)(p_new_socket);
 	// send filename
 	memset(buffer, 0, BUFFER_SIZE);
-	int path_len = read(new_socket, buffer, sizeof(buffer));
+	int path_len = read(new_socket, buffer, sizeof(buffer)+1);
 	char filename[FILE_SIZE] = {0};
-	strncpy(filename, buffer, FILE_SIZE);
+	strncpy(filename, buffer, strlen(buffer)+1);
 	memset(buffer, 0, BUFFER_SIZE);
 	printf("filename: %s\n", filename);
 	// filesize
@@ -50,7 +50,11 @@ void handleUpload(void* p_new_socket){
 	do {
 			int singleRecvd = read(new_socket, buffer, sizeof(buffer));
 			if (singleRecvd <= 0){
-				break;
+				int singleRecvd = read(new_socket, buffer, sizeof(buffer));
+				if (singleRecvd <= 0){
+					break;
+				}
+				// break;
 			}
 
 			write(fd, buffer, singleRecvd); // return number of bytes written

@@ -141,7 +141,7 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	send(sock, action, strlen(action), 0);
 	// send filename
 	printf("remote_filename: %s", remote_filename);
-	send(sock, remote_filename, strlen(remote_filename), 0);
+	send(sock, remote_filename, strlen(remote_filename)+1, 0);
 	// send filesize +1?
 	// send(sock, (char*)&filesize, sizeof(unsigned long long), 0);
 	// read(sock, buffer, sizeof(buffer));
