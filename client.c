@@ -77,8 +77,8 @@ int main(int argc, char const *argv[])
 	// upload file:
 	// file name
 	// char* filename = "1.txt";
-	// char* filename = "2.jpeg";
-	char *filename = "1.mp4";
+	char* filename = "2.jpeg";
+	// char *filename = "1.mp4";
 	printf("Preparing sending file: %s\n", filename);
 	int fd = open(filename, O_RDONLY);
 	// file size
