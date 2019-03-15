@@ -17,7 +17,7 @@ void handleUpload(void* p_new_socket){
 	long new_socket = (long)(p_new_socket);
 	// filename
 		// char *filename = "0.txt";
-	char *filename = "0.jpeg";
+	char *filename = "icon.png";
 	// FILE *fp = fopen(filename, "w+");
 	//定义一个名叫fp文件指针
 	// FILE *fp;
