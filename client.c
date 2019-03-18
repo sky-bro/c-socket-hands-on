@@ -36,18 +36,18 @@ server: ./server [-p port]\n\
 client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n";
 	// printf("%s", cmds);
 	// exit(0);
-	int ch;
+
+	// default parameters
 	int isUpload = 1;
 	char* action = "u";
-	// file name
-	// char* filename = "1.txt";
-	char* local_filename = "2.jpeg";
-	// char *filename = "1.mp4";
+	char* local_filename = "1.jpeg";
 	char* remote_filename = "0.jpeg";
 	char* serverIP = "127.0.0.1";
 	int PORT = 8080;
+
 	opterr=0;
-	while ((ch = getopt(argc, argv, "u:dl:i:p:r:h")) != EOF /*-1*/) {
+	char ch;
+	while ((ch = getopt(argc, argv, "u:dl:i:p:r:")) != EOF /*-1*/) {
 		// printf("optind: %d\n", optind);
    	switch (ch){
 	       case 'u':
@@ -57,7 +57,7 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	               break;
 	       case 'l':
 				 				 local_filename = optarg;
-								 printf("l: %s", optarg);
+								 // printf("l: %s", optarg);
 	               break;
 	       case 'i':
 	               serverIP = optarg;
@@ -67,13 +67,14 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 								 break;
 				 case 'r':
 				 				 remote_filename = optarg;
-								 printf("r: %s", optarg);
+								 // printf("r: %s", optarg);
 	               break;
 				 default:
 				 				printf("%s", cmds);
 				 				exit(1);
 		}
 	}
+
 	if (!isUpload) {
 		action = "d";
 	}
@@ -90,10 +91,12 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	//
 	// };
 
+	// local address
 	struct sockaddr_in address;
-	int sock = 0;
+	// server address
 	struct sockaddr_in serv_addr;
-	char buffer[1024] = {0};
+
+	int sock = 0;
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
 		printf("\n Socket creation error \n");
@@ -101,14 +104,12 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	}
 
 	memset(&serv_addr, '0', sizeof(serv_addr));
-
 	serv_addr.sin_family = AF_INET;
 	// host to network short
 	serv_addr.sin_port = htons(PORT);
 
 	// Convert IPv4 and IPv6 addresses from text to binary form
 	if(inet_pton(AF_INET, serverIP, &serv_addr.sin_addr)<=0)
-	// if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)
 	{
 		printf("\nInvalid address/ Address not supported \n");
 		return -1;
@@ -119,15 +120,18 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 		printf("\nConnection Failed \n");
 		return -1;
 	}
+	printf("***Connected to server %s@%d***\n", serverIP, PORT);
 
 	// send action: upload or download
+	printf("Send action: %s\n", action);
 	unsigned long long action_len = strlen(action) + 1;
 	sendSize(sock, action_len);
 	write(sock, action, strlen(action)+1);
 
+	char buffer[BUFFER_SIZE] = {0};
 	// upload file:
 	if (isUpload){
-		printf("Preparing sending file: %s\n", local_filename);
+		printf("Preparing uploading file: %s\n", local_filename);
 		// int fd = open(local_filename, O_RDONLY);
 		int fd;
 		if((fd=open(local_filename, O_RDONLY)) < 0)//打开操作不成功
@@ -139,24 +143,23 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 		struct stat statbuf;
 	  stat(local_filename,&statbuf);
 	  unsigned long long filesize=statbuf.st_size;
-		// printf("%s filesize: %d", filename, size);
-		printf("send %s of size %lld bytes to the server\n", local_filename, filesize);
 
 		// send filename
 		unsigned long long path_len = strlen(remote_filename) + 1;
 		sendSize(sock, path_len);
-		printf("writing remote_filename: %s to sock", remote_filename);
+		printf("writing remote_filename: %s to socket\n", remote_filename);
 		write(sock, remote_filename, path_len);
-		// send filesize +1?
-		// write(sock, (char*)&filesize, sizeof(unsigned long long));
+
+		printf("Upload %s of size %lld bytes to the server at %s\n", local_filename, filesize, remote_filename);
+
 		sendSize(sock, filesize);
-		// memset(buffer, 0, sizeof(buffer));
 		ssize_t singleRead = 0;
 		double sentsize = 0;
 		lock_set(fd, F_RDLCK);
 		do {
 				singleRead = read(fd, buffer, sizeof(buffer));
 				// with 0 flag, equivalent to write
+				// write(sock, buffer, singleRead)
 				if(singleRead > 0 && send(sock, buffer, singleRead, 0) >= 0 ){
 					sentsize += singleRead;
 					printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
@@ -167,12 +170,13 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 				}
 				memset( buffer,0, sizeof(buffer) );
 		} while (singleRead > 0);
+		printf("\n");
 		lock_set(fd, F_UNLCK);
 		close(fd);
 	} else {
 		// Download from server
-		printf("Preparing recving file: %s from server, save to %s\n", remote_filename, local_filename);
-		// int fd = open(local_filename, O_WRONLY);
+		printf("Preparing downloading file: %s\n", remote_filename);
+
 		int fd;
 		if((fd=open(local_filename, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) < 0)//打开操作不成功
 		{
@@ -183,11 +187,11 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 		// send filename
 		unsigned long long path_len = strlen(remote_filename) + 1;
 		sendSize(sock, path_len);
-		printf("writing remote_filename: %s to sock", remote_filename);
+		printf("writing remote_filename: %s to socket\n", remote_filename);
 		write(sock, remote_filename, path_len);
 
 		unsigned long long filesize = recvSize(sock);
-
+		printf("Download %s of size %lld bytes from server to %s\n", remote_filename, filesize, local_filename);
 		unsigned long long bytesRecvd = 0;
 		// write lock
 		lock_set(fd, F_WRLCK);
@@ -200,11 +204,10 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 				printf("%-4.2f%% data recv", bytesRecvd*100.0/filesize);
 				fflush(stdout);
 		} while (filesize - bytesRecvd > 0);
+		printf("\n");
 		lock_set(fd, F_UNLCK);
 		close(fd);
 	}
-
-	printf("\n");
 	close(sock);
 	return 0;
 }

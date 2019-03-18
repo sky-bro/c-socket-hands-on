@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
@@ -10,8 +11,7 @@
 #include <sys/stat.h>
 #include "lock_set.c"
 #define BUFFER_SIZE 1024
-#define PORT 8080
-#define FILE_SIZE 500
+// #define PORT 8080
 
 char buffer[BUFFER_SIZE] = {0};
 
@@ -67,6 +67,7 @@ void handleUpload(void* p_new_socket){
 	lock_set(fd, F_UNLCK);
 	close(fd);
 	close(new_socket);
+	printf("---------------------\n");
 }
 
 void handleDownload(void* p_new_socket){
@@ -118,16 +119,43 @@ void handleDownload(void* p_new_socket){
 	lock_set(fd, F_UNLCK);
 	close(fd);
 	close(new_socket);
+	printf("---------------------\n");
 }
 
 int main(int argc, char const *argv[])
 {
+		char *cmds = "Always fire up server first.\n\
+default port 8080\n\n\
+Upload file to server\n\
+----\n\
+server: ./server [-p port]\n\
+client: ./client -u -l path/on/client -i serverIP [-p port] -r path/on/server\n\n\
+Download file from server\n\
+----\n\
+server: ./server [-p port]\n\
+client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n";
+	// printf("%s", cmds);
+	// exit(0);
+	int PORT = 8080;
+	opterr = 0;
+	char ch;
+		while ((ch = getopt(argc, argv, "p:")) != EOF /*-1*/) {
+		// printf("optind: %d\n", optind);
+   	switch (ch){
+	       case 'p':
+								 PORT = atoi(optarg);
+								 break;
+				 default:
+				 				printf("%s", cmds);
+				 				exit(1);
+		}
+	}
+
 	chdir("./serverFile");
 	int server_fd, valread;
 	struct sockaddr_in address;
 	int opt = 1;
 	int addrlen = sizeof(address);
-	char *hello = "Hello from server";
 
 	// Creating socket file descriptor
 	if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
@@ -154,12 +182,14 @@ int main(int argc, char const *argv[])
 		perror("bind failed");
 		exit(EXIT_FAILURE);
 	}
+
 	// maximum client
-	if (listen(server_fd, 3) < 0)
+	if (listen(server_fd, 10) < 0)
 	{
 		perror("listen");
 		exit(EXIT_FAILURE);
 	}
+
 	while (1) {
 		// int* p_new_socket = (int*)malloc(sizeof(int));
 		long new_socket;
@@ -169,11 +199,12 @@ int main(int argc, char const *argv[])
 			perror("accept");
 			exit(EXIT_FAILURE);
 		}
+		printf("***Connected to client: %s@%d***\n", inet_ntoa(address.sin_addr), ntohs(address.sin_port));
 		// send action: upload or download
 		unsigned long long action_len = recvSize(new_socket);
 		read(new_socket, buffer, action_len);
 		int isUpload = 1;
-		printf("%s\n", buffer);
+		printf("*Action: %s\n", buffer);
 		if (strcmp(buffer, "u")){
 			isUpload = 0;
 		}
@@ -186,10 +217,10 @@ int main(int argc, char const *argv[])
 		pthread_t thread;
 		int ret_thrd;
 		if (isUpload){
-			printf("upload file\n");
+			printf("upload file to me\n");
 			ret_thrd = pthread_create(&thread, NULL, (void *)&handleUpload, (void *)new_socket);
 		} else {
-			printf("download file\n");
+			printf("download file from me\n");
 			ret_thrd = pthread_create(&thread, NULL, (void *)&handleDownload, (void *)new_socket);
 		}
 
