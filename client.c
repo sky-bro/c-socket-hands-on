@@ -9,7 +9,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include "lock_set.c"
 // #define PORT 8080
+#define BUFFER_SIZE 1024
 
 unsigned long long recvSize(int sock){
 	unsigned long long length;
@@ -45,7 +47,7 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	char* serverIP = "127.0.0.1";
 	int PORT = 8080;
 	opterr=0;
-	while ((ch = getopt(argc, argv, "u:d:l:i:p:r:h")) != EOF /*-1*/) {
+	while ((ch = getopt(argc, argv, "u:dl:i:p:r:h")) != EOF /*-1*/) {
 		// printf("optind: %d\n", optind);
    	switch (ch){
 	       case 'u':
@@ -55,6 +57,7 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	               break;
 	       case 'l':
 				 				 local_filename = optarg;
+								 printf("l: %s", optarg);
 	               break;
 	       case 'i':
 	               serverIP = optarg;
@@ -64,6 +67,7 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 								 break;
 				 case 'r':
 				 				 remote_filename = optarg;
+								 printf("r: %s", optarg);
 	               break;
 				 default:
 				 				printf("%s", cmds);
@@ -116,11 +120,21 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 		return -1;
 	}
 
+	// send action: upload or download
+	unsigned long long action_len = strlen(action) + 1;
+	sendSize(sock, action_len);
+	write(sock, action, strlen(action)+1);
 
 	// upload file:
 	if (isUpload){
 		printf("Preparing sending file: %s\n", local_filename);
-		int fd = open(local_filename, O_RDONLY);
+		// int fd = open(local_filename, O_RDONLY);
+		int fd;
+		if((fd=open(local_filename, O_RDONLY)) < 0)//打开操作不成功
+		{
+				perror("open file failed");
+				exit(EXIT_FAILURE);
+		}
 		// file size
 		struct stat statbuf;
 	  stat(local_filename,&statbuf);
@@ -128,9 +142,6 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 		// printf("%s filesize: %d", filename, size);
 		printf("send %s of size %lld bytes to the server\n", local_filename, filesize);
 
-		// send action: upload or download
-		unsigned long long action_len = strlen(action) + 1;
-		write(sock, action, strlen(action)+1);
 		// send filename
 		unsigned long long path_len = strlen(remote_filename) + 1;
 		sendSize(sock, path_len);
@@ -142,6 +153,7 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 		// memset(buffer, 0, sizeof(buffer));
 		ssize_t singleRead = 0;
 		double sentsize = 0;
+		lock_set(fd, F_RDLCK);
 		do {
 				singleRead = read(fd, buffer, sizeof(buffer));
 				// with 0 flag, equivalent to write
@@ -155,10 +167,41 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 				}
 				memset( buffer,0, sizeof(buffer) );
 		} while (singleRead > 0);
+		lock_set(fd, F_UNLCK);
 		close(fd);
-		// close(sock);
 	} else {
+		// Download from server
+		printf("Preparing recving file: %s from server, save to %s\n", remote_filename, local_filename);
+		// int fd = open(local_filename, O_WRONLY);
+		int fd;
+		if((fd=open(local_filename, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) < 0)//打开操作不成功
+		{
+				perror("open file failed");
+				exit(EXIT_FAILURE);
+		}
 
+		// send filename
+		unsigned long long path_len = strlen(remote_filename) + 1;
+		sendSize(sock, path_len);
+		printf("writing remote_filename: %s to sock", remote_filename);
+		write(sock, remote_filename, path_len);
+
+		unsigned long long filesize = recvSize(sock);
+
+		unsigned long long bytesRecvd = 0;
+		// write lock
+		lock_set(fd, F_WRLCK);
+		do {
+				memset(buffer, 0, BUFFER_SIZE);
+				int singleRecvd = read(sock, buffer, sizeof(buffer));
+				write(fd, buffer, singleRecvd); // return number of bytes written
+				bytesRecvd += singleRecvd;
+				printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
+				printf("%-4.2f%% data recv", bytesRecvd*100.0/filesize);
+				fflush(stdout);
+		} while (filesize - bytesRecvd > 0);
+		lock_set(fd, F_UNLCK);
+		close(fd);
 	}
 
 	printf("\n");
