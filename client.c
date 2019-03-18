@@ -11,6 +11,15 @@
 #include <fcntl.h>
 // #define PORT 8080
 
+unsigned long long recvSize(int sock){
+	unsigned long long length;
+	read(sock, (char *)&length, sizeof(unsigned long long));
+	return length;
+}
+
+void sendSize(int sock, unsigned long long length){
+	write(sock, (char *)&length, sizeof(unsigned long long));
+}
 
 int main(int argc, char const *argv[]){
 	char *cmds = "Always fire up server first.\n\
@@ -64,11 +73,6 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	if (!isUpload) {
 		action = "d";
 	}
-	// if (argc != )
-	// printf("argument count: %d\n", argc);
-	// for (int i = 0; i < argc; i++){
-	// 	printf("argument %d: %s\n", i, argv[i]);
-	// }
 
 	// struct sockaddr_in {
 	//
@@ -85,9 +89,7 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	struct sockaddr_in address;
 	int sock = 0;
 	struct sockaddr_in serv_addr;
-	char *hello = "Hello from client";
 	char buffer[1024] = {0};
-	char res[2];
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
 		printf("\n Socket creation error \n");
@@ -108,62 +110,58 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 		return -1;
 	}
 
-// download:
-// file name
-
-// file size
-
-// file
-
 	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
 	{
 		printf("\nConnection Failed \n");
 		return -1;
 	}
-	// send & recv Hello String
-	// send(sock , hello , strlen(hello) , 0 );
-	// printf("Hello message sent\n");
-	// read( sock , buffer, 1024);
-	// printf("%s\n",buffer );
+
 
 	// upload file:
+	if (isUpload){
+		printf("Preparing sending file: %s\n", local_filename);
+		int fd = open(local_filename, O_RDONLY);
+		// file size
+		struct stat statbuf;
+	  stat(local_filename,&statbuf);
+	  unsigned long long filesize=statbuf.st_size;
+		// printf("%s filesize: %d", filename, size);
+		printf("send %s of size %lld bytes to the server\n", local_filename, filesize);
 
-	printf("Preparing sending file: %s\n", local_filename);
-	int fd = open(local_filename, O_RDONLY);
-	// file size
-	struct stat statbuf;
-  stat(local_filename,&statbuf);
-  unsigned long long filesize=statbuf.st_size;
-	// printf("%s filesize: %d", filename, size);
-	printf("send %s of size %lld bytes to the server\n", local_filename, filesize);
+		// send action: upload or download
+		unsigned long long action_len = strlen(action) + 1;
+		write(sock, action, strlen(action)+1);
+		// send filename
+		unsigned long long path_len = strlen(remote_filename) + 1;
+		sendSize(sock, path_len);
+		printf("writing remote_filename: %s to sock", remote_filename);
+		write(sock, remote_filename, path_len);
+		// send filesize +1?
+		// write(sock, (char*)&filesize, sizeof(unsigned long long));
+		sendSize(sock, filesize);
+		// memset(buffer, 0, sizeof(buffer));
+		ssize_t singleRead = 0;
+		double sentsize = 0;
+		do {
+				singleRead = read(fd, buffer, sizeof(buffer));
+				// with 0 flag, equivalent to write
+				if(singleRead > 0 && send(sock, buffer, singleRead, 0) >= 0 ){
+					sentsize += singleRead;
+					printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
+					printf("%-4.2f%% data sent", sentsize/filesize*100);
+					fflush(stdout);
+				} else {
+					break;
+				}
+				memset( buffer,0, sizeof(buffer) );
+		} while (singleRead > 0);
+		close(fd);
+		// close(sock);
+	} else {
 
-	// send action: upload or download
-	send(sock, action, strlen(action), 0);
-	// send filename
-	printf("remote_filename: %s", remote_filename);
-	send(sock, remote_filename, strlen(remote_filename)+1, 0);
-	// send filesize +1?
-	// send(sock, (char*)&filesize, sizeof(unsigned long long), 0);
-	// read(sock, buffer, sizeof(buffer));
-	// printf("res: %s", buffer);
-	memset(buffer, 0, sizeof(buffer));
-	ssize_t singleRead = 0;
-	double sentsize = 0;
-	do {
-			singleRead = read(fd, buffer, sizeof(buffer));
-			// with 0 flag, equivalent to write
-			if(singleRead > 0 && send(sock, buffer, singleRead, 0) >= 0 ){
-				sentsize += singleRead;
-				printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
-				printf("%-4.2f%% data sent", sentsize/filesize*100);
-				fflush(stdout);
-			} else {
-				break;
-			}
-			memset( buffer,0, sizeof(buffer) );
-	} while (singleRead > 0);
+	}
+
 	printf("\n");
-	close(fd);
 	close(sock);
 	return 0;
 }

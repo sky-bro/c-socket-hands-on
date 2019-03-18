@@ -1,3 +1,4 @@
+#define _GNU_SOURCE         /* See feature_test_macros(7) */
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -13,18 +14,26 @@
 
 char buffer[BUFFER_SIZE] = {0};
 
+unsigned long long recvSize(int sock){
+	unsigned long long length;
+	read(sock, (char *)&length, sizeof(unsigned long long));
+	return length;
+}
+
+void sendSize(int sock, unsigned long long length){
+	write(sock, (char *)&length, sizeof(unsigned long long));
+}
+
 void handleUpload(void* p_new_socket){
 	long new_socket = (long)(p_new_socket);
 	// send filename
 	memset(buffer, 0, BUFFER_SIZE);
-	int path_len = read(new_socket, buffer, sizeof(buffer)+1);
-	char filename[FILE_SIZE] = {0};
-	strncpy(filename, buffer, strlen(buffer)+1);
-	memset(buffer, 0, BUFFER_SIZE);
-	printf("filename: %s\n", filename);
+	unsigned long long path_len = recvSize(new_socket);
+	read(new_socket, buffer, path_len);
+	printf("filename: %s\n", buffer);
 	// filesize
 	// write(new_socket, "ok", 3);
-	// unsigned long long filesize = 0;
+	unsigned long long filesize = recvSize(new_socket);
 	// read(new_socket, (char*)&filesize, sizeof(unsigned long long));
 	// printf("filesize: %lld", filesize);
 	// filename
@@ -35,35 +44,32 @@ void handleUpload(void* p_new_socket){
 	// FILE *fp;
 	int fd;
 	// open(filename, O_CREAT|O_WRONLY|O_TRUNC) == create(filename)
-	if((fd=open(filename, O_CREAT|O_WRONLY|O_TRUNC)) < 0)//打开操作不成功
+	uid_t ruid ,euid,suid;
+	getresuid(&ruid, &euid, &suid);
+	printf("resuid: (%u, %u, %u)", ruid, euid, suid);
+	// user: rw, group/other: r
+	if((fd=open(buffer, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) < 0)//打开操作不成功
 	{
 			perror("open file failed");
 			exit(EXIT_FAILURE);
 	}
 
-	printf("prepared file %s for upload\n", filename);
+	printf("prepared file %s for upload\n", buffer);
 
 	// printf("Recving data of size %lld bytes from client\n", filesize);
 	unsigned long long bytesRecvd = 0;
 	// write lock
 	lock_set(fd, F_WRLCK);
 	do {
+			memset(buffer, 0, BUFFER_SIZE);
 			int singleRecvd = read(new_socket, buffer, sizeof(buffer));
-			if (singleRecvd <= 0){
-				int singleRecvd = read(new_socket, buffer, sizeof(buffer));
-				if (singleRecvd <= 0){
-					break;
-				}
-				// break;
-			}
-
 			write(fd, buffer, singleRecvd); // return number of bytes written
 			bytesRecvd += singleRecvd;
 			// printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
 			// printf("%-4.2f%% data recv", bytesRecvd*100.0/filesize);
 			// fflush(stdout);
-	// } while (filesize - bytesRecvd > 0);
-	} while (1);
+	} while (filesize - bytesRecvd > 0);
+	// } while (1);
 	// unlock
 	lock_set(fd, F_UNLCK);
 	close(fd);
@@ -123,29 +129,32 @@ int main(int argc, char const *argv[])
 			exit(EXIT_FAILURE);
 		}
 		// send action: upload or download
-		read(new_socket, buffer, sizeof(buffer));
+		unsigned long long action_len = 2;
+		read(new_socket, buffer, action_len);
 		int isUpload = 1;
 		printf("%s\n", buffer);
 		if (strcmp(buffer, "u")){
 			isUpload = 0;
 		}
-		if (isUpload){
-			printf("upload file\n");
-		} else {
-			printf("download file\n");
-		}
+		// if (isUpload){
+		// 	printf("upload file\n");
+		// } else {
+		// 	printf("download file\n");
+		// }
 	// handle upload file
 		pthread_t thread;
 		int ret_thrd;
 		if (isUpload){
+			printf("upload file\n");
 			ret_thrd = pthread_create(&thread, NULL, (void *)&handleUpload, (void *)new_socket);
 		} else {
+			printf("download file\n");
 			ret_thrd = pthread_create(&thread, NULL, (void *)&handleDownload, (void *)new_socket);
 		}
 
-		if (ret_thrd != 0) {
+		if (ret_thrd) { // != 0
          printf("create handle thread failed\n");
-     } else {
+     } else { // = 0
          printf("create handle thread success\n");
      }
 	}
