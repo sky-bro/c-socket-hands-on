@@ -137,13 +137,17 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	// printf("%s", cmds);
 	// exit(0);
 	int PORT = 8080;
+	int maxClient = 5;
 	opterr = 0;
 	char ch;
-		while ((ch = getopt(argc, argv, "p:")) != EOF /*-1*/) {
+		while ((ch = getopt(argc, argv, "p:m:")) != EOF /*-1*/) {
 		// printf("optind: %d\n", optind);
    	switch (ch){
 	       case 'p':
 								 PORT = atoi(optarg);
+								 break;
+				 case 'm':
+								 maxClient = atoi(optarg) < 100? atoi(optarg):maxClient;
 								 break;
 				 default:
 				 				printf("%s", cmds);
@@ -184,7 +188,7 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	}
 
 	// maximum client
-	if (listen(server_fd, 10) < 0)
+	if (listen(server_fd, maxClient) < 0)
 	{
 		perror("listen");
 		exit(EXIT_FAILURE);
