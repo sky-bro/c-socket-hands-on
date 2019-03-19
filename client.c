@@ -45,9 +45,9 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 	char* serverIP = "127.0.0.1";
 	int PORT = 8080;
 
-	opterr=0;
+	// opterr=0;
 	char ch;
-	while ((ch = getopt(argc, argv, "u:dl:i:p:r:")) != EOF /*-1*/) {
+	while ((ch = getopt(argc, argv, "udl:i:p:r:")) != EOF /*-1*/) {
 		// printf("optind: %d\n", optind);
    	switch (ch){
 	       case 'u':

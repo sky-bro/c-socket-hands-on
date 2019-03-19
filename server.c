@@ -39,7 +39,7 @@ void handleUpload(void* p_new_socket){
 	// getresuid(&ruid, &euid, &suid);
 	// printf("resuid: (%u, %u, %u)", ruid, euid, suid);
 
-	// user: rw, group/other: r
+	// user/group: rw, other: r
 	int fd;
 	if((fd=open(buffer, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) < 0)//打开操作不成功
 	{
@@ -125,20 +125,21 @@ void handleDownload(void* p_new_socket){
 int main(int argc, char const *argv[])
 {
 		char *cmds = "Always fire up server first.\n\
-default port 8080\n\n\
+default port 8080\n\
+default maxClient 5\n\n\
 Upload file to server\n\
 ----\n\
-server: ./server [-p port]\n\
-client: ./client -u -l path/on/client -i serverIP [-p port] -r path/on/server\n\n\
+server: ./server [-p port] [-m maxClient]\n\
+client: ./client [-u] -l path/on/client [-i serverIP] [-p port] -r path/on/server\n\n\
 Download file from server\n\
 ----\n\
-server: ./server [-p port]\n\
-client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n";
+server: ./server [-p port] [-m maxClient]\n\
+client: ./client -d -l path/on/client [-i serverIP] [-p port] -r path/on/server\n";
 	// printf("%s", cmds);
 	// exit(0);
 	int PORT = 8080;
 	int maxClient = 5;
-	opterr = 0;
+	// opterr = 0;
 	char ch;
 		while ((ch = getopt(argc, argv, "p:m:")) != EOF /*-1*/) {
 		// printf("optind: %d\n", optind);
@@ -155,7 +156,7 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 		}
 	}
 
-	chdir("./serverFile");
+	// chdir("./serverFile");
 	int server_fd, valread;
 	struct sockaddr_in address;
 	int opt = 1;
@@ -193,6 +194,9 @@ client: ./client -d -l path/on/client -i serverIP [-p port] -r path/on/server\n"
 		perror("listen");
 		exit(EXIT_FAILURE);
 	}
+
+	printf("server listening at port %d, allow maxClient -- %d\n", PORT, maxClient);
+	fflush(stdout);
 
 	while (1) {
 		// int* p_new_socket = (int*)malloc(sizeof(int));
